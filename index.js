@@ -2,6 +2,8 @@ import config from './config'
 import fetch from 'node-fetch'
 import fs from 'fs'
 
+let k = 0, page = 1
+let proc_loaded = false, page_loded = false
 const urls = {
     que_index: 'https://www.myfreemp3.com.cn/'
 }
@@ -12,6 +14,24 @@ function format_singer(str) {
 }
 function has_singer(list, goal) {
     return format_singer(list).split(',').indexOf(format_singer(goal)) >= 0
+}
+function load_proc() {
+    try {
+        ({ k, page } = JSON.parse(fs.readFileSync('./data/proc.json', 'utf-8')))
+        fs.copyFileSync('./data/proc.json', './data/proc.json.bak')
+        fs.writeFileSync('./data/proc.json', '')
+        proc_loaded = true
+    }
+    catch {}
+}
+function save_proc() {
+    fs.writeFileSync('./data/proc.json', JSON.stringify({ k, page }))
+}
+function reset_page() {
+    if (proc_loaded && ! page_loded)
+        page_loded = true
+    else
+        page = 1
 }
 async function que_page(name, singer, list, page) {
     try {
@@ -37,6 +57,7 @@ async function que_page(name, singer, list, page) {
         }
         const i = (+ json.data.total) / (+ json.data.more) - page
         console.log(`- Querying: ${name} (${i} left)`)
+        save_proc()
         return i
     }
     catch {
@@ -44,26 +65,27 @@ async function que_page(name, singer, list, page) {
     }
 }
 async function que_singer(name, singer, list) {
-    let i = 1
-    while (await que_page(name, singer, list, i ++) > 0);
+    while (await que_page(name, singer, list, page ++) > 0);
 }
 async function que_song(name, singer, list) {
-    let i = 1
-    while (i < config.song_que_times && await que_page(name, singer, list, i ++) > 0);
+    while (i < config.song_que_times && await que_page(name, singer, list, page ++) > 0);
 }
 async function main() {
     try {
         const src_list = JSON.parse(fs.readFileSync('./data/src.json', 'utf-8'))
         const list = JSON.parse(fs.readFileSync('./data/list.json', 'utf-8'))
         list[config.folder_others] = {}
-        for (let k = 0; k < src_list.length; k ++) {
+        load_proc()
+        for (; k < src_list.length; k ++) {
             const v = src_list[k]
             if (v.type == 'singer') {
                 list[v.name] = {}
+                reset_page()
                 await que_singer(v.name, v.name, list[v.name])
             }
             else if (v.type == 'song') {
                 list[config.folder_others][v.name] = {}
+                reset_page()
                 await que_song(v.name, null || v.singer, list[config.folder_others][v.name])
             }
             fs.writeFileSync('./data/list.json', JSON.stringify(list))
