@@ -4,10 +4,20 @@ import fs from 'fs'
 
 let list = {}, k = 0, page = 1
 let proc_loaded = false, page_loded = false
-const urls = {
-    que_index: 'https://www.myfreemp3.com.cn/'
+const paths = {
+    'headers': './tools/headers/output.json',
+    'list': './data/list.json',
+    'proc': './data/proc.json',
+    'src': './data/src.json',
 }
-const headers = JSON.parse('{"Accept":"*/*","Accept-Encoding":"gzip, deflate, br, zstd","Accept-Language":"zh-CN,zh;q=0.9,en;q=0.8","Content-Type":"application/x-www-form-urlencoded; charset=UTF-8","Cookie":"UM_distinctid=18fd205034fa8-08cd0f20351d0f-26001c51-146d15-18fd20503504cb; CNZZDATA1281319036=472317582-1717215495-%7C1717219977","Origin":"https://www.myfreemp3.com.cn","Priority":"u=1, i","Sec-Ch-Ua":"\\"Google Chrome\\";v=\\"125\\", \\"Chromium\\";v=\\"125\\", \\"Not.A/Brand\\";v=\\"24\\"","Sec-Ch-Ua-Mobile":"?0","Sec-Ch-Ua-Platform":"\\"Windows\\"","Sec-Fetch-Dest":"empty","Sec-Fetch-Mode":"cors","Sec-Fetch-Site":"same-origin","User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36","X-Requested-With":"XMLHttpRequest"}')
+const urls = {
+    index: 'https://www.myfreemp3.com.cn/',
+}
+const headers = JSON.parse(fs.readFileSync(paths.headers, 'utf-8'))
+
+function sleep(int) {
+    return new Promise(resolve => setTimeout(resolve, int))
+}
 
 function format_singer(str) {
     return str.replace(/\s/g, '').replace(/&/g, ',').toLowerCase()
@@ -17,24 +27,22 @@ function has_singer(list, goal) {
 }
 function load_list() {
     try {
-        list = JSON.parse(fs.readFileSync('./data/list.json', 'utf-8'))
+        list = JSON.parse(fs.readFileSync(paths.list, 'utf-8'))
     }
     catch {}
 }
 function save_list() {
-    fs.writeFileSync('./data/list.json', JSON.stringify(list))
+    fs.writeFileSync(paths.list, JSON.stringify(list))
 }
 function load_proc() {
     try {
-        ({ k, page } = JSON.parse(fs.readFileSync('./data/proc.json', 'utf-8')))
-        fs.copyFileSync('./data/proc.json', './data/proc.json.bak')
-        fs.writeFileSync('./data/proc.json', '')
+        ({ k, page } = JSON.parse(fs.readFileSync(paths.proc, 'utf-8')))
         proc_loaded = true
     }
     catch {}
 }
 function save_proc() {
-    fs.writeFileSync('./data/proc.json', JSON.stringify({ k, page }))
+    fs.writeFileSync(paths.proc, JSON.stringify({ k, page }))
 }
 function reset_page() {
     if (proc_loaded && ! page_loded)
@@ -43,17 +51,18 @@ function reset_page() {
         page = 1
 }
 async function que_page(name, singer, list, page) {
-    try {
+    const go = async () => {
         const json = await (
             await fetch(
-                urls.que_index,
+                urls.index,
                 {
                     method: 'POST',
                     headers: headers,
                     body: `input=${name}&filter=name&page=${page}&type=netease`
                 }
             )
-        ).json()
+        ).text()
+        console.log(json)
         if (! json) throw new Error
         if (! json.data) throw new Error
         if (! json.data.list) throw new Error
@@ -70,19 +79,27 @@ async function que_page(name, singer, list, page) {
         console.log(`- Querying: ${name} (${i} left)`)
         return i
     }
-    catch {
-        throw new Error(`Error while querying: ${name}`)
+    let tries = config.tries_times
+    while (true) {
+        try { return await go() }
+        catch {
+            if (-- tries < 0)
+                throw new Error(`Failed 5 times while querying: ${name}`)
+            console.log(`- Failed but trying: ${name} (${tries} left)`)
+            await sleep(config.tries_interval)
+        }
     }
 }
 async function que_singer(name, singer, list) {
     while (await que_page(name, singer, list, page ++) > 0);
 }
 async function que_song(name, singer, list) {
+    let i = 0
     while (i < config.song_que_times && await que_page(name, singer, list, page ++) > 0);
 }
 async function main() {
     try {
-        const src_list = JSON.parse(fs.readFileSync('./data/src.json', 'utf-8'))
+        const src_list = JSON.parse(fs.readFileSync(paths.src, 'utf-8'))
         load_list()
         if (! list[config.folder_others])
             list[config.folder_others] = {}
@@ -105,7 +122,7 @@ async function main() {
         console.log('* Success!')
     }
     catch (err) {
-        throw new Error(`[Error] in main process: ${err}`)
+        throw new Error(`in main process: ${err}`)
     }
 }
 

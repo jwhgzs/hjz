@@ -1,17 +1,11 @@
 {
-  "name": "hjz",
-  "type": "module",
+  "name": "delax",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "dependencies": {
-    "id3-parser": "^3.0.0",
-    "node-fetch": "^3.3.2"
-  },
-  "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "jwhgzs",
+  "author": "",
   "license": "MIT"
 }
